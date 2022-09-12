@@ -143,23 +143,24 @@ class DemodulatorFSK{
         std::vector<double> difference; // разность значений на выходе
         z0.resize(sqrtI0.size());
         z1.resize(sqrtI0.size());
+        difference.resize(sqrtI0.size());
 
         for(int i=0;i<difference.size();i++)
         {
             z0[i]=sqrtI0[i]+sqrtQ0[i];
             z1[i]=sqrtI1[i]+sqrtQ1[i];
+            difference[i]=z1[i]-z0[i];
         }
 
 
-
-//        //Получение последовательности нулей и единиц
-//        for(int i=0;i<difference.size();i++)
-//        {
-//            if(difference[i]>0)
-//                bin.push_back(1);
-//            else
-//                bin.push_back(0);
-//        }
+        //Получение последовательности нулей и единиц
+        for(int i=0;i<difference.size();i+=countPerSymbol/2)
+        {
+            if(difference[i]>0)
+                bin.push_back(1);
+            else
+                bin.push_back(0);
+        }
 
 
         return bin;
