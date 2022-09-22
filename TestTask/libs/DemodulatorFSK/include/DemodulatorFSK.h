@@ -4,7 +4,9 @@
 #include <math.h>
 #include <algorithm>
 #include <numeric>
+#include <iterator>
 #include "../../Filter/include/Filter.h"
+#include "../../Correlation/include/Correlation.h"
 
 class DemodulatorFSK{
 
@@ -76,44 +78,6 @@ class DemodulatorFSK{
         summaQ0=filtMAV.filtration(Q0,countPerSymbol);
         summaQ1=filtMAV.filtration(Q1,countPerSymbol);
 
-//        int j=0;        //переменная для определения шага
-//        int step=0;
-//        double sumI0;   // временная переменная для кореляционных сумм
-//        double sumQ0;   // временная переменная для кореляционных сумм
-//        double sumI1;   // временная переменная для кореляционных сумм
-//        double sumQ1;   // временная переменная для кореляционных сумм
-
-//        // Цикл для вычисления корреляционных сумм
-//        while (step<in.size())
-//        {
-//            //если мы прошли 6 символов, то мы получили стоп бит, который в 1.5 раза длинее обычной посылки
-//            if (j==6)
-//            {
-//               sumI0=std::accumulate(begin(I0)+step,begin(I0)+step+stopBitDuration*countPerSymbol,0.0);
-//               sumI1=std::accumulate(begin(I1)+step,begin(I1)+step+stopBitDuration*countPerSymbol,0.0);
-//               sumQ0=std::accumulate(begin(Q0)+step,begin(Q0)+step+stopBitDuration*countPerSymbol,0.0);
-//               sumQ1=std::accumulate(begin(Q1)+step,begin(Q1)+step+stopBitDuration*countPerSymbol,0.0);
-
-//               step+=stopBitDuration*countPerSymbol;    // увеличение шага на длину стопового бита
-//               j=0;
-//            }
-//            // вычисление сумм для обычных посылок
-//            else
-//            {
-//               sumI0=std::accumulate(begin(I0)+step,begin(I0)+step+countPerSymbol,0.0);
-//               sumI1=std::accumulate(begin(I1)+step,begin(I1)+step+countPerSymbol,0.0);
-//               sumQ0=std::accumulate(begin(Q0)+step,begin(Q0)+step+countPerSymbol,0.0);
-//               sumQ1=std::accumulate(begin(Q1)+step,begin(Q1)+step+countPerSymbol,0.0);
-
-//               step+=countPerSymbol;    // увеличение шага на длину обычного бита
-//               j++;
-//            }
-//            summaI0.push_back(sumI0);
-//            summaI1.push_back(sumI1);
-//            summaQ0.push_back(sumQ0);
-//            summaQ1.push_back(sumQ1);
-//        }
-
 
         std::vector<double> sqrtI0; //вектор для расчёта квадрата
         std::vector<double> sqrtI1; //вектор для расчёта квадрата
@@ -143,24 +107,65 @@ class DemodulatorFSK{
         std::vector<double> difference; // разность значений на выходе
         z0.resize(sqrtI0.size());
         z1.resize(sqrtI0.size());
-        difference.resize(sqrtI0.size());
 
-        for(int i=0;i<difference.size();i++)
+        for(int i=0;i<z1.size();i++)
         {
             z0[i]=sqrtI0[i]+sqrtQ0[i];
             z1[i]=sqrtI1[i]+sqrtQ1[i];
-            difference[i]=z1[i]-z0[i];
         }
 
+        std::vector<double> startStop(round(z1.size()/(countPerSymbol*7.5))*countPerSymbol*7.5,0.0);
 
-        //Получение последовательности нулей и единиц
-        for(int i=0;i<difference.size();i+=countPerSymbol/2)
+        for(int i=0;i<startStop.size();i+=5*countPerSymbol)
         {
-            if(difference[i]>0)
-                bin.push_back(1);
-            else
-                bin.push_back(0);
+            for(int j=0;j<2.5*countPerSymbol;j++)
+            {
+                if(j<stopBitDuration*countPerSymbol)
+                    startStop[i+j]=1;
+                else
+                    startStop[j+i]=-1;
+            }
         }
+
+        Correlation corr;
+        std::vector<double> r1;
+        r1=corr.correlation(z1,startStop);
+
+        std::vector<double>::const_iterator find_it = std::max_element(r1.begin(),r1.end());
+
+        double maxCorr=*std::max_element(r1.begin(),r1.end());
+        int ind=find_it-r1.begin()-1;
+
+        int p=0;
+        while (ind<z0.size()){
+            if(p==0)
+            {
+              ind+=1.5*countPerSymbol/2;
+              if(z1[ind]>z0[ind])
+                  bin.push_back(1);
+              else
+                  bin.push_back(0);
+              ind+=1.25*countPerSymbol;
+              p=6;
+            }
+            else
+            {
+                if(z1[ind]>z0[ind])
+                    bin.push_back(1);
+                else
+                    bin.push_back(0);
+                ind+=countPerSymbol;
+                --p;
+            }
+        }
+        //Получение последовательности нулей и единиц
+//        for(int i=0;i<difference.size();i+=countPerSymbol/2)
+//        {
+//            if(difference[i]>0)
+//                bin.push_back(1);
+//            else
+//                bin.push_back(0);
+//        }
 
 
         return bin;
